@@ -115,7 +115,7 @@ func (c *Client) ListMembers(ctx context.Context, groupKey string) ([]string, er
 		return nil, err
 	}
 	out := make([]string, 0, len(seen))
-	for e := range seen {
+	for e := range seen { // nosemgrep: trailofbits.go.iterate-over-empty-map.iterate-over-empty-map
 		out = append(out, e)
 	}
 	sort.Strings(out)
