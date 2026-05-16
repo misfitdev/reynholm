@@ -1,0 +1,6 @@
+[tools]
+go = "1.26"
+golangci-lint = "latest"
+goreleaser = "latest"
+lefthook = "latest"
+"go:golang.org/x/vuln/cmd/govulncheck" = "latest"

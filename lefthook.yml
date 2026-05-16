@@ -1,0 +1,17 @@
+pre-commit:
+  parallel: true
+  commands:
+    vet:
+      run: go vet ./...
+    build:
+      run: go build ./...
+
+pre-push:
+  parallel: true
+  commands:
+    test:
+      run: go test -race ./...
+    lint:
+      run: golangci-lint run ./...
+    vulncheck:
+      run: govulncheck ./...

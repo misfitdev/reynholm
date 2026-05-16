@@ -24,6 +24,13 @@ profile.cov
 go.work
 go.work.sum
 
+# Build output
+bin/
+dist/
+
+# Local tool state
+.sisyphus/
+
 # env file
 .env
 

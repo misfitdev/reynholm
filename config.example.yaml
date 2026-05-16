@@ -1,0 +1,32 @@
+# Reynholm syncs Google Workspace group memberships into ZITADEL project role grants.
+# It runs statelessly: every execution reads the current state from both APIs,
+# computes the diff, and applies corrections.
+#
+# Dry-run is the default. Pass --apply to commit changes.
+
+# Your Google Workspace primary domain.
+google_domain: planera.io
+
+# ZITADEL role group label marking reynholm ownership.
+# reynholm ONLY manages roles and grants where the ZITADEL role's Group field
+# matches this value. All other roles and grants are invisible to reynholm.
+managed_group: reynholm
+
+projects:
+    # ZITADEL project ID. reynholm does not create projects -- they must exist.
+  - id: "claude-project-id"
+    # Google Workspace group emails whose members receive roles on this project.
+    # Role key = email local part (e.g. engineering@planera.io -> "engineering").
+    # Display name = the group's name from Google.
+    groups:
+      - engineering@planera.io
+      - design@planera.io
+
+  - id: "slack-project-id"
+    groups:
+      - employees@planera.io
+
+  - id: "datadog-project-id"
+    groups:
+      - engineering@planera.io
+      - sre@planera.io

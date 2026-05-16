@@ -1,0 +1,77 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go vet ./...
+
+builds:
+  - id: reynholm
+    main: .
+    binary: reynholm
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: "reynholm_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+dockers_v2:
+  - id: reynholm
+    images:
+      - "ghcr.io/misfitdev/reynholm"
+    tags:
+      - "{{ .Version }}"
+      - latest
+    dockerfile: Dockerfile.goreleaser
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    sbom: false
+    labels:
+      org.opencontainers.image.title: reynholm
+      org.opencontainers.image.description: Sync Google Workspace group memberships into ZITADEL project role grants
+      org.opencontainers.image.url: https://github.com/misfitdev/reynholm
+      org.opencontainers.image.source: https://github.com/misfitdev/reynholm
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.licenses: MIT
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+      - "^ci:"
+  groups:
+    - title: Features
+      regexp: "^.*(?:Add|add|feat).*$"
+      order: 0
+    - title: Bug Fixes
+      regexp: "^.*(?:Fix|fix|Handle|handle).*$"
+      order: 1
+    - title: Other
+      order: 999
+
+release:
+  github:
+    owner: misfitdev
+    name: reynholm
+  draft: false
+  prerelease: auto
+  name_template: "Reynholm {{ .Version }}"

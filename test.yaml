@@ -1,0 +1,10 @@
+google_domain: example.com
+managed_group: all-staff@example.com
+projects:
+  - id: "123456789012345678"
+    groups:
+      - engineers@example.com
+      - sre@example.com
+  - id: "987654321098765432"
+    groups:
+      - finance@example.com
