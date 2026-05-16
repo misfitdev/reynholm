@@ -26,3 +26,18 @@ func (s *sdkDirectory) ListMembersPage(ctx context.Context, groupKey, pageToken 
 	}
 	return resp.Members, resp.NextPageToken, nil
 }
+
+func (s *sdkDirectory) ListGroupsPage(ctx context.Context, domain, query, pageToken string) ([]*admin.Group, string, error) {
+	call := s.svc.Groups.List().Domain(domain).Context(ctx)
+	if query != "" {
+		call = call.Query(query)
+	}
+	if pageToken != "" {
+		call = call.PageToken(pageToken)
+	}
+	resp, err := call.Do()
+	if err != nil {
+		return nil, "", err
+	}
+	return resp.Groups, resp.NextPageToken, nil
+}

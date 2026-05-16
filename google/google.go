@@ -36,6 +36,9 @@ type Directory interface {
 	// ListMembersPage returns one page of members. Empty pageToken requests
 	// the first page; empty returned token marks the last page.
 	ListMembersPage(ctx context.Context, groupKey, pageToken string) (members []*admin.Member, nextPageToken string, err error)
+	// ListGroupsPage returns one page of groups matching query. The query
+	// uses the Directory API search syntax (e.g. "email:access-*").
+	ListGroupsPage(ctx context.Context, domain, query, pageToken string) (groups []*admin.Group, nextPageToken string, err error)
 }
 
 // Client is the high-level Google Workspace client used by reynholm.
@@ -172,4 +175,39 @@ func (c *Client) collect(ctx context.Context, groupKey string, seen, visited map
 // to a member whose state we cannot positively confirm.
 func isActive(m *admin.Member) bool {
 	return strings.EqualFold(m.Status, memberStatusActive)
+}
+
+// ListGroups returns all group emails in domain matching query. The query
+// uses the Directory API search syntax (e.g. "email:access-*"). Results are
+// sorted and lowercased.
+func (c *Client) ListGroups(ctx context.Context, domain, query string) ([]string, error) {
+	if c == nil || c.dir == nil {
+		return nil, errors.New("google: client not initialized")
+	}
+	if domain == "" {
+		return nil, errors.New("google: domain is required")
+	}
+
+	var (
+		emails    []string
+		pageToken string
+	)
+	for {
+		groups, next, err := c.dir.ListGroupsPage(ctx, domain, query, pageToken)
+		if err != nil {
+			return nil, fmt.Errorf("google: list groups: %w", err)
+		}
+		for _, g := range groups {
+			if g == nil || g.Email == "" {
+				continue
+			}
+			emails = append(emails, strings.ToLower(g.Email))
+		}
+		if next == "" {
+			break
+		}
+		pageToken = next
+	}
+	sort.Strings(emails)
+	return emails, nil
 }

@@ -29,6 +29,7 @@ import (
 type googleClient interface {
 	GetGroupDisplayName(ctx context.Context, groupKey string) (string, error)
 	ListMembers(ctx context.Context, groupKey string) ([]string, error)
+	ListGroups(ctx context.Context, domain, query string) ([]string, error)
 }
 
 // zitadelClient is the subset of the ZITADEL client used by Reconciler.
@@ -147,48 +148,92 @@ func (r *Reconciler) buildPlan(
 
 	seenRole := make(map[string]struct{}, len(project.Groups))
 	for _, groupEmail := range project.Groups {
-		roleKey, err := roleKeyFromEmail(groupEmail)
-		if err != nil {
-			return nil, fmt.Errorf("group %q: %w", groupEmail, err)
-		}
-		if _, dup := seenRole[roleKey]; dup {
-			// Two groups producing the same RoleKey is a config error we
-			// surface loudly rather than silently merge.
-			return nil, fmt.Errorf("duplicate role key %q derived from group %q", roleKey, groupEmail)
-		}
-		seenRole[roleKey] = struct{}{}
-		plan.roleKeys = append(plan.roleKeys, roleKey)
-
-		gLogger := logger.With("group", groupEmail, "role_key", roleKey)
-
-		displayName, err := r.Google.GetGroupDisplayName(ctx, groupEmail)
-		if err != nil {
-			return nil, fmt.Errorf("google get group %q: %w", groupEmail, err)
-		}
-		if displayName == "" {
-			// Fall back to RoleKey so ZITADEL roles are not nameless.
-			displayName = roleKey
-		}
-		plan.displayNames[roleKey] = displayName
-
-		members, err := r.Google.ListMembers(ctx, groupEmail)
-		if err != nil {
-			return nil, fmt.Errorf("google list members %q: %w", groupEmail, err)
-		}
-
-		expected := make(map[string]struct{}, len(members))
-		for _, email := range members {
-			userID, ok := emailToUserID[email]
-			if !ok {
-				gLogger.Warn("skipping member without zitadel user", "email", email)
-				continue
+		if strings.ContainsAny(groupEmail, "*?[") {
+			expanded, err := r.expandGlob(ctx, groupEmail, logger)
+			if err != nil {
+				return nil, fmt.Errorf("expand glob %q: %w", groupEmail, err)
 			}
-			expected[userID] = struct{}{}
+			for _, ge := range expanded {
+				if err := r.processGroup(ctx, ge, plan, seenRole, emailToUserID, logger); err != nil {
+					return nil, err
+				}
+			}
+			continue
 		}
-		plan.expectedByRole[roleKey] = expected
-		gLogger.Info("group resolved", "display_name", displayName, "members", len(members), "mapped", len(expected))
+		if err := r.processGroup(ctx, groupEmail, plan, seenRole, emailToUserID, logger); err != nil {
+			return nil, err
+		}
 	}
 	return plan, nil
+}
+
+// expandGlob resolves a glob pattern like "access-*@example.com" into
+// concrete group emails by querying the Google Directory API.
+func (r *Reconciler) expandGlob(ctx context.Context, pattern string, logger *slog.Logger) ([]string, error) {
+	at := strings.IndexByte(pattern, '@')
+	if at < 0 {
+		return nil, fmt.Errorf("glob pattern %q missing domain", pattern)
+	}
+	domain := pattern[at+1:]
+	query := "email:" + pattern
+
+	groups, err := r.Google.ListGroups(ctx, domain, query)
+	if err != nil {
+		return nil, fmt.Errorf("list groups: %w", err)
+	}
+	if len(groups) == 0 {
+		logger.Warn("glob pattern matched no groups", "pattern", pattern)
+	}
+	return groups, nil
+}
+
+// processGroup resolves a single concrete group email into the plan.
+func (r *Reconciler) processGroup(
+	ctx context.Context,
+	groupEmail string,
+	plan *projectPlan,
+	seenRole map[string]struct{},
+	emailToUserID map[string]string,
+	logger *slog.Logger,
+) error {
+	roleKey, err := roleKeyFromEmail(groupEmail)
+	if err != nil {
+		return fmt.Errorf("group %q: %w", groupEmail, err)
+	}
+	if _, dup := seenRole[roleKey]; dup {
+		return fmt.Errorf("duplicate role key %q derived from group %q", roleKey, groupEmail)
+	}
+	seenRole[roleKey] = struct{}{}
+	plan.roleKeys = append(plan.roleKeys, roleKey)
+
+	gLogger := logger.With("group", groupEmail, "role_key", roleKey)
+
+	displayName, err := r.Google.GetGroupDisplayName(ctx, groupEmail)
+	if err != nil {
+		return fmt.Errorf("google get group %q: %w", groupEmail, err)
+	}
+	if displayName == "" {
+		displayName = roleKey
+	}
+	plan.displayNames[roleKey] = displayName
+
+	members, err := r.Google.ListMembers(ctx, groupEmail)
+	if err != nil {
+		return fmt.Errorf("google list members %q: %w", groupEmail, err)
+	}
+
+	expected := make(map[string]struct{}, len(members))
+	for _, email := range members {
+		userID, ok := emailToUserID[email]
+		if !ok {
+			gLogger.Warn("skipping member without zitadel user", "email", email)
+			continue
+		}
+		expected[userID] = struct{}{}
+	}
+	plan.expectedByRole[roleKey] = expected
+	gLogger.Info("group resolved", "display_name", displayName, "members", len(members), "mapped", len(expected))
+	return nil
 }
 
 // reconcileRoles creates any configured RoleKey that is not yet present in

@@ -18,6 +18,9 @@ type fakeGoogle struct {
 	members      map[string][]string
 	displayErr   error
 	membersErr   error
+	// listGroups maps "domain|query" to group emails.
+	listGroups    map[string][]string
+	listGroupsErr error
 }
 
 func (f *fakeGoogle) GetGroupDisplayName(_ context.Context, groupKey string) (string, error) {
@@ -32,6 +35,13 @@ func (f *fakeGoogle) ListMembers(_ context.Context, groupKey string) ([]string, 
 		return nil, f.membersErr
 	}
 	return f.members[groupKey], nil
+}
+
+func (f *fakeGoogle) ListGroups(_ context.Context, domain, query string) ([]string, error) {
+	if f.listGroupsErr != nil {
+		return nil, f.listGroupsErr
+	}
+	return f.listGroups[domain+"|"+query], nil
 }
 
 type addRoleCall struct {
@@ -462,5 +472,79 @@ func TestRun_DuplicateGrantSameRoleIsCleanedUp(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected duplicate grant for alice to be removed, got removes=%v", z.removeGrantCalls)
+	}
+}
+
+func TestRun_GlobExpansion(t *testing.T) {
+	g := &fakeGoogle{
+		displayNames: map[string]string{
+			"access-eng@example.com":    "Engineering Access",
+			"access-design@example.com": "Design Access",
+		},
+		members: map[string][]string{
+			"access-eng@example.com":    {"alice@example.com"},
+			"access-design@example.com": {"bob@example.com"},
+		},
+		listGroups: map[string][]string{
+			"example.com|email:access-*@example.com": {
+				"access-design@example.com",
+				"access-eng@example.com",
+			},
+		},
+	}
+	z := newFakeZitadel()
+	z.users = map[string]string{
+		"alice@example.com": "u-alice",
+		"bob@example.com":   "u-bob",
+	}
+	z.rolesByProject["p1"] = map[string]string{}
+	cfg := &config.Config{
+		GoogleDomain: "example.com",
+		ManagedGroup: "google-sync",
+		Projects: []config.Project{
+			{ID: "p1", Groups: []string{"access-*@example.com"}},
+		},
+	}
+	r := New(g, z, cfg, discardLogger())
+
+	if err := r.Run(context.Background(), false); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	wantRoles := []addRoleCall{
+		{"p1", "access-design", "Design Access", "google-sync"},
+		{"p1", "access-eng", "Engineering Access", "google-sync"},
+	}
+	if !reflect.DeepEqual(z.addRoleCalls, wantRoles) {
+		t.Errorf("addRoleCalls = %v, want %v", z.addRoleCalls, wantRoles)
+	}
+
+	gotAdds := append([]addGrantCall(nil), z.addGrantCalls...)
+	sort.Slice(gotAdds, func(i, j int) bool { return gotAdds[i].UserID < gotAdds[j].UserID })
+	wantAdds := []addGrantCall{
+		{"p1", "u-alice", "access-eng"},
+		{"p1", "u-bob", "access-design"},
+	}
+	if !reflect.DeepEqual(gotAdds, wantAdds) {
+		t.Errorf("addGrantCalls = %v, want %v", gotAdds, wantAdds)
+	}
+}
+
+func TestRun_GlobExpansionError(t *testing.T) {
+	g := &fakeGoogle{
+		listGroupsErr: errors.New("api down"),
+	}
+	z := newFakeZitadel()
+	z.users = map[string]string{"a@example.com": "u-a"}
+	cfg := &config.Config{
+		GoogleDomain: "example.com",
+		ManagedGroup: "google-sync",
+		Projects: []config.Project{
+			{ID: "p1", Groups: []string{"access-*@example.com"}},
+		},
+	}
+	r := New(g, z, cfg, discardLogger())
+	if err := r.Run(context.Background(), true); err == nil {
+		t.Fatal("expected error from glob expansion")
 	}
 }

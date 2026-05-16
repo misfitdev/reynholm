@@ -18,6 +18,8 @@ type fakeDir struct {
 	getErr      error
 	listCalls   int
 	pageHistory []string
+	// listGroupsPages maps "domain|query" to pages of groups.
+	listGroupsPages map[string][][]*admin.Group
 }
 
 func newFakeDir() *fakeDir {
@@ -47,7 +49,29 @@ func (f *fakeDir) ListMembersPage(_ context.Context, groupKey, pageToken string)
 	pages := f.pages[groupKey]
 	idx := 0
 	if pageToken != "" {
-		// Token format used by the fake: "p<index>".
+		if pageToken[0] != 'p' {
+			return nil, "", errors.New("bad token")
+		}
+		idx = int(pageToken[1] - '0')
+	}
+	if idx >= len(pages) {
+		return nil, "", nil
+	}
+	next := ""
+	if idx+1 < len(pages) {
+		next = "p" + string(rune('0'+idx+1))
+	}
+	return pages[idx], next, nil
+}
+
+func (f *fakeDir) ListGroupsPage(_ context.Context, domain, query, pageToken string) ([]*admin.Group, string, error) {
+	if f.listErr != nil {
+		return nil, "", f.listErr
+	}
+	key := domain + "|" + query
+	pages := f.listGroupsPages[key]
+	idx := 0
+	if pageToken != "" {
 		if pageToken[0] != 'p' {
 			return nil, "", errors.New("bad token")
 		}
@@ -229,5 +253,52 @@ func TestNewClient_RequiresEnv(t *testing.T) {
 	t.Setenv(envAdminEmail, "")
 	if _, err := NewClient(context.Background()); err == nil {
 		t.Fatal("expected error when admin email missing")
+	}
+}
+
+func TestListGroups(t *testing.T) {
+	fd := newFakeDir()
+	fd.listGroupsPages = map[string][][]*admin.Group{
+		"example.com|email:access-*": {{
+			{Email: "access-eng@example.com"},
+			{Email: "access-design@example.com"},
+		}},
+	}
+	c := NewClientWithDirectory(fd)
+
+	got, err := c.ListGroups(context.Background(), "example.com", "email:access-*")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	want := []string{"access-design@example.com", "access-eng@example.com"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ListGroups = %v, want %v", got, want)
+	}
+}
+
+func TestListGroups_Pagination(t *testing.T) {
+	fd := newFakeDir()
+	fd.listGroupsPages = map[string][][]*admin.Group{
+		"example.com|email:access-*": {
+			{{Email: "access-a@example.com"}, {Email: "access-b@example.com"}},
+			{{Email: "access-c@example.com"}},
+		},
+	}
+	c := NewClientWithDirectory(fd)
+
+	got, err := c.ListGroups(context.Background(), "example.com", "email:access-*")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	want := []string{"access-a@example.com", "access-b@example.com", "access-c@example.com"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ListGroups = %v, want %v", got, want)
+	}
+}
+
+func TestListGroups_EmptyDomain(t *testing.T) {
+	c := NewClientWithDirectory(newFakeDir())
+	if _, err := c.ListGroups(context.Background(), "", "email:access-*"); err == nil {
+		t.Fatal("expected error for empty domain")
 	}
 }
