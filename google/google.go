@@ -109,13 +109,13 @@ func (c *Client) ListMembers(ctx context.Context, groupKey string) ([]string, er
 	if groupKey == "" {
 		return nil, errors.New("google: groupKey is required")
 	}
-	seen := make(map[string]struct{})
+	seen := make(map[string]struct{}) // nosemgrep: trailofbits.go.iterate-over-empty-map.iterate-over-empty-map
 	visited := make(map[string]struct{})
 	if err := c.collect(ctx, groupKey, seen, visited); err != nil {
 		return nil, err
 	}
 	out := make([]string, 0, len(seen))
-	for e := range seen { // nosemgrep: trailofbits.go.iterate-over-empty-map.iterate-over-empty-map
+	for e := range seen {
 		out = append(out, e)
 	}
 	sort.Strings(out)
