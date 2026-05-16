@@ -36,6 +36,7 @@ type zitadelClient interface {
 	LookupUserIDs(ctx context.Context) (map[string]string, error)
 	ListProjectRoles(ctx context.Context, projectID, managedGroup string) (map[string]string, error)
 	AddProjectRole(ctx context.Context, projectID, roleKey, displayName, managedGroup string) error
+	RemoveProjectRole(ctx context.Context, projectID, roleKey string) error
 	ListUserGrants(ctx context.Context, projectID string) ([]zitadel.Grant, error)
 	AddUserGrant(ctx context.Context, projectID, userID, roleKey string) error
 	RemoveUserGrant(ctx context.Context, projectID, userID, roleKey, authorizationID string) error
@@ -191,7 +192,8 @@ func (r *Reconciler) buildPlan(
 }
 
 // reconcileRoles creates any configured RoleKey that is not yet present in
-// ZITADEL under the managed group. Roles outside the config are not touched.
+// ZITADEL under the managed group, and removes stale roles that carry the
+// managed group tag but are no longer in the config.
 func (r *Reconciler) reconcileRoles(
 	ctx context.Context,
 	projectID string,
@@ -203,7 +205,10 @@ func (r *Reconciler) reconcileRoles(
 	if err != nil {
 		return fmt.Errorf("zitadel list roles: %w", err)
 	}
+
+	desired := make(map[string]struct{}, len(plan.roleKeys))
 	for _, roleKey := range plan.roleKeys {
+		desired[roleKey] = struct{}{}
 		if _, present := actualRoles[roleKey]; present {
 			continue
 		}
@@ -215,6 +220,26 @@ func (r *Reconciler) reconcileRoles(
 		logger.Info("creating role", "role_key", roleKey, "display_name", displayName)
 		if err := r.Zitadel.AddProjectRole(ctx, projectID, roleKey, displayName, r.Config.ManagedGroup); err != nil {
 			return fmt.Errorf("zitadel add project role %q: %w", roleKey, err)
+		}
+	}
+
+	// Remove stale roles that carry the managed group tag but are no longer
+	// in the config. These are orphans from groups removed from the YAML.
+	stale := make([]string, 0)
+	for roleKey := range actualRoles {
+		if _, want := desired[roleKey]; !want {
+			stale = append(stale, roleKey)
+		}
+	}
+	sort.Strings(stale)
+	for _, roleKey := range stale {
+		if dryRun {
+			logger.Info("would remove stale role", "role_key", roleKey)
+			continue
+		}
+		logger.Info("removing stale role", "role_key", roleKey)
+		if err := r.Zitadel.RemoveProjectRole(ctx, projectID, roleKey); err != nil {
+			return fmt.Errorf("zitadel remove project role %q: %w", roleKey, err)
 		}
 	}
 	return nil

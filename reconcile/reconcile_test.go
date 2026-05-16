@@ -37,6 +37,9 @@ func (f *fakeGoogle) ListMembers(_ context.Context, groupKey string) ([]string, 
 type addRoleCall struct {
 	ProjectID, RoleKey, DisplayName, Group string
 }
+type removeRoleCall struct {
+	ProjectID, RoleKey string
+}
 type addGrantCall struct {
 	ProjectID, UserID, RoleKey string
 }
@@ -50,6 +53,7 @@ type fakeZitadel struct {
 	grantsByProject map[string][]zitadel.Grant
 
 	addRoleCalls     []addRoleCall
+	removeRoleCalls  []removeRoleCall
 	addGrantCalls    []addGrantCall
 	removeGrantCalls []removeGrantCall
 
@@ -57,6 +61,7 @@ type fakeZitadel struct {
 	rolesErr       error
 	grantsErr      error
 	addRoleErr     error
+	removeRoleErr  error
 	addGrantErr    error
 	removeGrantErr error
 }
@@ -96,6 +101,15 @@ func (f *fakeZitadel) AddProjectRole(_ context.Context, projectID, roleKey, disp
 		f.rolesByProject[projectID] = map[string]string{}
 	}
 	f.rolesByProject[projectID][roleKey] = displayName
+	return nil
+}
+
+func (f *fakeZitadel) RemoveProjectRole(_ context.Context, projectID, roleKey string) error {
+	if f.removeRoleErr != nil {
+		return f.removeRoleErr
+	}
+	f.removeRoleCalls = append(f.removeRoleCalls, removeRoleCall{projectID, roleKey})
+	delete(f.rolesByProject[projectID], roleKey)
 	return nil
 }
 
@@ -197,6 +211,9 @@ func TestRun_DryRun_MakesNoMutations(t *testing.T) {
 	}
 	if len(z.removeGrantCalls) != 0 {
 		t.Errorf("removeGrantCalls = %v, want none in dry-run", z.removeGrantCalls)
+	}
+	if len(z.removeRoleCalls) != 0 {
+		t.Errorf("removeRoleCalls = %v, want none in dry-run", z.removeRoleCalls)
 	}
 }
 
@@ -385,6 +402,45 @@ func TestRun_NilConfigFails(t *testing.T) {
 	r := &Reconciler{Google: &fakeGoogle{}, Zitadel: newFakeZitadel(), Logger: discardLogger()}
 	if err := r.Run(context.Background(), true); err == nil {
 		t.Fatal("expected error for nil config")
+	}
+}
+
+func TestRun_RemovesStaleRoles(t *testing.T) {
+	g, z := fixtureFakes()
+	// "legacy-team" exists in ZITADEL under the managed group but is not in the config.
+	z.rolesByProject["p1"]["legacy-team"] = "Legacy Team"
+	r := New(g, z, baseCfg(), discardLogger())
+
+	if err := r.Run(context.Background(), false); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+
+	wantRemoves := []removeRoleCall{{"p1", "legacy-team"}}
+	if !reflect.DeepEqual(z.removeRoleCalls, wantRemoves) {
+		t.Errorf("removeRoleCalls = %v, want %v", z.removeRoleCalls, wantRemoves)
+	}
+}
+
+func TestRun_DryRun_DoesNotRemoveStaleRoles(t *testing.T) {
+	g, z := fixtureFakes()
+	z.rolesByProject["p1"]["legacy-team"] = "Legacy Team"
+	r := New(g, z, baseCfg(), discardLogger())
+
+	if err := r.Run(context.Background(), true); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if len(z.removeRoleCalls) != 0 {
+		t.Errorf("removeRoleCalls = %v, want none in dry-run", z.removeRoleCalls)
+	}
+}
+
+func TestRun_PropagatesRemoveRoleErr(t *testing.T) {
+	g, z := fixtureFakes()
+	z.rolesByProject["p1"]["legacy-team"] = "Legacy Team"
+	z.removeRoleErr = errors.New("remove role failed")
+	r := New(g, z, baseCfg(), discardLogger())
+	if err := r.Run(context.Background(), false); err == nil {
+		t.Fatal("expected error from RemoveProjectRole")
 	}
 }
 

@@ -2,6 +2,7 @@
 
 <p align="center">
 <a href="https://github.com/misfitdev/reynholm/actions/workflows/ci.yml"><img src="https://github.com/misfitdev/reynholm/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+<a href="https://github.com/misfitdev/reynholm/actions/workflows/release.yml"><img src="https://github.com/misfitdev/reynholm/actions/workflows/release.yml/badge.svg" alt="Release"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
 </p>
 
@@ -13,7 +14,7 @@ Runs statelessly: reads current state from both systems, diffs, and corrects.
 <p align="center">
 <a href="#install">Install</a> &middot;
 <a href="#quick-start">Quick start</a> &middot;
-<a href="#commands">Commands</a> &middot;
+<a href="#flags">Flags</a> &middot;
 <a href="#config">Config</a> &middot;
 <a href="#how-it-works">How it works</a> &middot;
 <a href="#security">Security</a>
@@ -70,13 +71,13 @@ reynholm --config reynholm.yaml
 reynholm --config reynholm.yaml --apply
 ```
 
-## Commands
+## Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--config` | (required) | Path to YAML config file |
 | `--apply` | `false` | Commit changes to ZITADEL |
-| `--dry-run` | `true` | Preview only; overrides `--apply` when both are set |
+| `--dry-run` | `false` | Preview only; overrides `--apply` when both are set |
 | `--log-level` | `info` | `debug` / `info` / `warn` / `error` |
 | `--log-format` | `text` | `text` or `json` |
 | `--version` | | Print version and exit |
@@ -128,6 +129,7 @@ reynholm is a stateless reconciler. Every run:
 4. **Translates emails to UserIDs** -- maps Google member emails to ZITADEL user IDs. Warns and skips users not yet synced to ZITADEL.
 5. **Diffs and corrects**:
    - Creates missing project roles (tagged with `managed_group`).
+   - Removes stale roles that carry the `managed_group` tag but are no longer in the config.
    - Adds missing user grants.
    - Removes extraneous grants for users no longer in the corresponding Google group.
 
