@@ -385,3 +385,53 @@ func TestNewClient_RequiresArgs(t *testing.T) {
 		t.Fatal("expected error for empty pat")
 	}
 }
+
+func TestClose_NoopOnFakeClient(t *testing.T) {
+	c := NewClientWithServices(newFakeServices())
+	if err := c.Close(); err != nil {
+		t.Fatalf("Close on fake client returned error: %v", err)
+	}
+}
+
+func TestClose_NoopOnNilClient(t *testing.T) {
+	var c *Client
+	if err := c.Close(); err != nil {
+		t.Fatalf("Close on nil client returned error: %v", err)
+	}
+}
+
+func TestAddProjectRole_ErrorPropagated(t *testing.T) {
+	f := newFakeServices()
+	f.addErr = errors.New("add failed")
+	c := NewClientWithServices(f)
+	if err := c.AddProjectRole(context.Background(), "p1", "k", "n", "g"); err == nil {
+		t.Fatal("expected error from AddProjectRole")
+	}
+}
+
+func TestRemoveProjectRole_ErrorPropagated(t *testing.T) {
+	f := newFakeServices()
+	f.removeErr = errors.New("remove failed")
+	c := NewClientWithServices(f)
+	if err := c.RemoveProjectRole(context.Background(), "p1", "k"); err == nil {
+		t.Fatal("expected error from RemoveProjectRole")
+	}
+}
+
+func TestAddUserGrant_ErrorPropagated(t *testing.T) {
+	f := newFakeServices()
+	f.createErr = errors.New("create failed")
+	c := NewClientWithServices(f)
+	if err := c.AddUserGrant(context.Background(), "p1", "u1", "r"); err == nil {
+		t.Fatal("expected error from AddUserGrant")
+	}
+}
+
+func TestRemoveUserGrant_ErrorPropagated(t *testing.T) {
+	f := newFakeServices()
+	f.deleteErr = errors.New("delete failed")
+	c := NewClientWithServices(f)
+	if err := c.RemoveUserGrant(context.Background(), "p1", "u1", "r", "auth-1"); err == nil {
+		t.Fatal("expected error from RemoveUserGrant")
+	}
+}

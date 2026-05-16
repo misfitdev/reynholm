@@ -111,6 +111,11 @@ func run(cmd *cobra.Command, _ []string) error {
 		logger.Error("zitadel client init failed", "err", err, "domain", zitadelDomain)
 		return fmt.Errorf("zitadel client: %w", err)
 	}
+	defer func() {
+		if err := zitadelClient.Close(); err != nil {
+			logger.Warn("zitadel client close failed", "err", err)
+		}
+	}()
 
 	r := reconcile.New(googleClient, zitadelClient, cfg, logger)
 	if err := r.Run(ctx, !effectiveApply); err != nil {

@@ -52,7 +52,8 @@ type services interface {
 
 // Client is the high-level ZITADEL client used by reynholm.
 type Client struct {
-	svc services
+	svc    services
+	closer func() error // non-nil only when constructed by NewClient
 }
 
 // NewClient constructs a Client backed by the ZITADEL v3 unified gRPC client
@@ -70,7 +71,7 @@ func NewClient(ctx context.Context, domain, pat string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("zitadel: client.New: %w", err)
 	}
-	return &Client{svc: &sdkServices{c: c}}, nil
+	return &Client{svc: &sdkServices{c: c}, closer: c.Close}, nil
 }
 
 // NewClientWithServices builds a Client around a caller-supplied services
@@ -78,6 +79,16 @@ func NewClient(ctx context.Context, domain, pat string) (*Client, error) {
 // use NewClient.
 func NewClientWithServices(s services) *Client {
 	return &Client{svc: s}
+}
+
+// Close releases the underlying gRPC connection. It must be called when the
+// Client is no longer needed. Clients constructed via NewClientWithServices
+// have no connection to release; Close is a no-op for them.
+func (c *Client) Close() error {
+	if c == nil || c.closer == nil {
+		return nil
+	}
+	return c.closer()
 }
 
 // LookupUserIDs fetches every ZITADEL user (paginated) and returns a map
@@ -237,9 +248,9 @@ func (c *Client) AddUserGrant(ctx context.Context, projectID, userID, roleKey st
 }
 
 // RemoveUserGrant deletes the authorization identified by authorizationID.
-// projectID, userID, and roleKey are accepted for symmetry and logging but
-// are not sent to the API: ZITADEL DeleteAuthorization keys solely on the
-// authorization ID returned by ListUserGrants.
+// projectID, userID, and roleKey are accepted for call-site symmetry with
+// AddUserGrant but are not forwarded to the API: ZITADEL DeleteAuthorization
+// keys solely on the authorization ID returned by ListUserGrants.
 func (c *Client) RemoveUserGrant(ctx context.Context, projectID, userID, roleKey, authorizationID string) error {
 	if c == nil || c.svc == nil {
 		return errors.New("zitadel: client not initialized")
