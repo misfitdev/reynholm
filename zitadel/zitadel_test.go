@@ -86,7 +86,7 @@ func (f *fakeServices) ListAuthorizationsPage(_ context.Context, projectID strin
 	return slicePage(all, offset, limit), uint64(len(all)), nil
 }
 
-func (f *fakeServices) CreateAuthorization(_ context.Context, projectID, userID, roleKey string) error {
+func (f *fakeServices) CreateAuthorization(_ context.Context, _, projectID, userID, roleKey string) error {
 	if f.createErr != nil {
 		return f.createErr
 	}
@@ -140,7 +140,7 @@ func TestLookupUserIDs_LowercaseAndSkipNonHuman(t *testing.T) {
 		{UserId: "u3", Type: &userV2.User_Human{Human: &userV2.HumanUser{}}},
 		humanUser("u4", "carol@example.com"),
 	}
-	c := NewClientWithServices(f)
+	c := NewClientWithServices(f, "org-1")
 
 	got, err := c.LookupUserIDs(context.Background())
 	if err != nil {
@@ -164,7 +164,7 @@ func TestLookupUserIDs_Pagination(t *testing.T) {
 			"user"+strconv.Itoa(i)+"@example.com",
 		))
 	}
-	c := NewClientWithServices(f)
+	c := NewClientWithServices(f, "org-1")
 
 	got, err := c.LookupUserIDs(context.Background())
 	if err != nil {
@@ -181,7 +181,7 @@ func TestLookupUserIDs_DuplicateEmailFirstWins(t *testing.T) {
 		humanUser("first", "dup@example.com"),
 		humanUser("second", "DUP@example.com"),
 	}
-	c := NewClientWithServices(f)
+	c := NewClientWithServices(f, "org-1")
 
 	got, err := c.LookupUserIDs(context.Background())
 	if err != nil {
@@ -195,7 +195,7 @@ func TestLookupUserIDs_DuplicateEmailFirstWins(t *testing.T) {
 func TestLookupUserIDs_ErrorPropagated(t *testing.T) {
 	f := newFakeServices()
 	f.listErr = errors.New("boom")
-	c := NewClientWithServices(f)
+	c := NewClientWithServices(f, "org-1")
 
 	if _, err := c.LookupUserIDs(context.Background()); err == nil {
 		t.Fatal("expected error")
@@ -218,7 +218,7 @@ func TestListProjectRoles_FiltersByManagedGroup(t *testing.T) {
 		projectRole("legacy", "Legacy", "other-source"),
 		projectRole("orphan", "Orphan", ""),
 	}
-	c := NewClientWithServices(f)
+	c := NewClientWithServices(f, "org-1")
 
 	got, err := c.ListProjectRoles(context.Background(), "p1", "google-sync")
 	if err != nil {
@@ -234,7 +234,7 @@ func TestListProjectRoles_FiltersByManagedGroup(t *testing.T) {
 }
 
 func TestListProjectRoles_RequiresProjectID(t *testing.T) {
-	c := NewClientWithServices(newFakeServices())
+	c := NewClientWithServices(newFakeServices(), "org-1")
 	if _, err := c.ListProjectRoles(context.Background(), "", "g"); err == nil {
 		t.Fatal("expected error for empty projectID")
 	}
@@ -242,7 +242,7 @@ func TestListProjectRoles_RequiresProjectID(t *testing.T) {
 
 func TestAddProjectRole_PassesGroupTag(t *testing.T) {
 	f := newFakeServices()
-	c := NewClientWithServices(f)
+	c := NewClientWithServices(f, "org-1")
 
 	if err := c.AddProjectRole(context.Background(), "p1", "engineers", "Engineering", "google-sync"); err != nil {
 		t.Fatalf("unexpected err: %v", err)
@@ -254,7 +254,7 @@ func TestAddProjectRole_PassesGroupTag(t *testing.T) {
 }
 
 func TestAddProjectRole_RejectsEmptyArgs(t *testing.T) {
-	c := NewClientWithServices(newFakeServices())
+	c := NewClientWithServices(newFakeServices(), "org-1")
 	if err := c.AddProjectRole(context.Background(), "", "k", "n", "g"); err == nil {
 		t.Fatal("expected error for empty projectID")
 	}
@@ -265,7 +265,7 @@ func TestAddProjectRole_RejectsEmptyArgs(t *testing.T) {
 
 func TestRemoveProjectRole(t *testing.T) {
 	f := newFakeServices()
-	c := NewClientWithServices(f)
+	c := NewClientWithServices(f, "org-1")
 	if err := c.RemoveProjectRole(context.Background(), "p1", "engineers"); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -295,7 +295,7 @@ func TestListUserGrants_FlattensRoles(t *testing.T) {
 		authWith("a3", "", "skipped"),
 		{Id: "a4", User: &authorizationV2.User{Id: "u3"}, Roles: []*authorizationV2.Role{{Key: ""}}},
 	}
-	c := NewClientWithServices(f)
+	c := NewClientWithServices(f, "org-1")
 
 	got, err := c.ListUserGrants(context.Background(), "p1")
 	if err != nil {
@@ -322,7 +322,7 @@ func TestListUserGrants_Pagination(t *testing.T) {
 	for i := 0; i < 230; i++ {
 		f.auths["p1"] = append(f.auths["p1"], authWith("a"+strconv.Itoa(i), "u"+strconv.Itoa(i), "r"))
 	}
-	c := NewClientWithServices(f)
+	c := NewClientWithServices(f, "org-1")
 
 	got, err := c.ListUserGrants(context.Background(), "p1")
 	if err != nil {
@@ -335,7 +335,7 @@ func TestListUserGrants_Pagination(t *testing.T) {
 
 func TestAddUserGrant(t *testing.T) {
 	f := newFakeServices()
-	c := NewClientWithServices(f)
+	c := NewClientWithServices(f, "org-1")
 	if err := c.AddUserGrant(context.Background(), "p1", "u1", "engineers"); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestAddUserGrant(t *testing.T) {
 }
 
 func TestAddUserGrant_RejectsEmpty(t *testing.T) {
-	c := NewClientWithServices(newFakeServices())
+	c := NewClientWithServices(newFakeServices(), "org-1")
 	cases := [][3]string{
 		{"", "u", "r"},
 		{"p", "", "r"},
@@ -361,7 +361,7 @@ func TestAddUserGrant_RejectsEmpty(t *testing.T) {
 
 func TestRemoveUserGrant_KeysOnAuthorizationID(t *testing.T) {
 	f := newFakeServices()
-	c := NewClientWithServices(f)
+	c := NewClientWithServices(f, "org-1")
 	if err := c.RemoveUserGrant(context.Background(), "p1", "u1", "engineers", "auth-xyz"); err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -371,23 +371,26 @@ func TestRemoveUserGrant_KeysOnAuthorizationID(t *testing.T) {
 }
 
 func TestRemoveUserGrant_RequiresAuthorizationID(t *testing.T) {
-	c := NewClientWithServices(newFakeServices())
+	c := NewClientWithServices(newFakeServices(), "org-1")
 	if err := c.RemoveUserGrant(context.Background(), "p", "u", "r", ""); err == nil {
 		t.Fatal("expected error for empty authorizationID")
 	}
 }
 
 func TestNewClient_RequiresArgs(t *testing.T) {
-	if _, err := NewClient(context.Background(), "", "pat"); err == nil {
+	if _, err := NewClient(context.Background(), "", "pat", "org"); err == nil {
 		t.Fatal("expected error for empty domain")
 	}
-	if _, err := NewClient(context.Background(), "example.zitadel.cloud", ""); err == nil {
+	if _, err := NewClient(context.Background(), "example.zitadel.cloud", "", "org"); err == nil {
 		t.Fatal("expected error for empty pat")
+	}
+	if _, err := NewClient(context.Background(), "example.zitadel.cloud", "pat", ""); err == nil {
+		t.Fatal("expected error for empty orgID")
 	}
 }
 
 func TestClose_NoopOnFakeClient(t *testing.T) {
-	c := NewClientWithServices(newFakeServices())
+	c := NewClientWithServices(newFakeServices(), "org-1")
 	if err := c.Close(); err != nil {
 		t.Fatalf("Close on fake client returned error: %v", err)
 	}
@@ -403,7 +406,7 @@ func TestClose_NoopOnNilClient(t *testing.T) {
 func TestAddProjectRole_ErrorPropagated(t *testing.T) {
 	f := newFakeServices()
 	f.addErr = errors.New("add failed")
-	c := NewClientWithServices(f)
+	c := NewClientWithServices(f, "org-1")
 	if err := c.AddProjectRole(context.Background(), "p1", "k", "n", "g"); err == nil {
 		t.Fatal("expected error from AddProjectRole")
 	}
@@ -412,7 +415,7 @@ func TestAddProjectRole_ErrorPropagated(t *testing.T) {
 func TestRemoveProjectRole_ErrorPropagated(t *testing.T) {
 	f := newFakeServices()
 	f.removeErr = errors.New("remove failed")
-	c := NewClientWithServices(f)
+	c := NewClientWithServices(f, "org-1")
 	if err := c.RemoveProjectRole(context.Background(), "p1", "k"); err == nil {
 		t.Fatal("expected error from RemoveProjectRole")
 	}
@@ -421,7 +424,7 @@ func TestRemoveProjectRole_ErrorPropagated(t *testing.T) {
 func TestAddUserGrant_ErrorPropagated(t *testing.T) {
 	f := newFakeServices()
 	f.createErr = errors.New("create failed")
-	c := NewClientWithServices(f)
+	c := NewClientWithServices(f, "org-1")
 	if err := c.AddUserGrant(context.Background(), "p1", "u1", "r"); err == nil {
 		t.Fatal("expected error from AddUserGrant")
 	}
@@ -430,7 +433,7 @@ func TestAddUserGrant_ErrorPropagated(t *testing.T) {
 func TestRemoveUserGrant_ErrorPropagated(t *testing.T) {
 	f := newFakeServices()
 	f.deleteErr = errors.New("delete failed")
-	c := NewClientWithServices(f)
+	c := NewClientWithServices(f, "org-1")
 	if err := c.RemoveUserGrant(context.Background(), "p1", "u1", "r", "auth-1"); err == nil {
 		t.Fatal("expected error from RemoveUserGrant")
 	}

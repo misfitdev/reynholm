@@ -95,11 +95,12 @@ func (s *sdkServices) ListAuthorizationsPage(ctx context.Context, projectID stri
 	return resp.GetAuthorizations(), resp.GetPagination().GetTotalResult(), nil
 }
 
-func (s *sdkServices) CreateAuthorization(ctx context.Context, projectID, userID, roleKey string) error {
+func (s *sdkServices) CreateAuthorization(ctx context.Context, orgID, projectID, userID, roleKey string) error {
 	_, err := s.c.AuthorizationServiceV2().CreateAuthorization(ctx, &authorizationV2.CreateAuthorizationRequest{
-		UserId:    userID,
-		ProjectId: projectID,
-		RoleKeys:  []string{roleKey},
+		UserId:         userID,
+		ProjectId:      projectID,
+		OrganizationId: orgID,
+		RoleKeys:       []string{roleKey},
 	})
 	if err != nil {
 		return fmt.Errorf("zitadel: create authorization (user=%q project=%q role=%q): %w", userID, projectID, roleKey, err)

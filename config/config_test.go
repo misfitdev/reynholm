@@ -20,6 +20,7 @@ func writeTemp(t *testing.T, name, body string) string {
 func TestLoad_Valid(t *testing.T) {
 	body := `
 google_domain: example.com
+zitadel_org_id: "372844504547344154"
 managed_group: all-staff@example.com
 projects:
   - id: "123456789"
@@ -60,9 +61,24 @@ projects:
 	}
 }
 
+func TestLoad_MissingOrgID(t *testing.T) {
+	body := `
+google_domain: example.com
+managed_group: reynholm
+projects:
+  - id: "1"
+    groups: [a@example.com]
+`
+	_, err := Load(writeTemp(t, "x.yaml", body))
+	if err == nil || !strings.Contains(err.Error(), "zitadel_org_id") {
+		t.Fatalf("expected zitadel_org_id error, got %v", err)
+	}
+}
+
 func TestLoad_MissingManagedGroup(t *testing.T) {
 	body := `
 google_domain: example.com
+zitadel_org_id: "123"
 projects:
   - id: "1"
     groups: [a@example.com]
@@ -76,6 +92,7 @@ projects:
 func TestLoad_NoProjects(t *testing.T) {
 	body := `
 google_domain: example.com
+zitadel_org_id: "123"
 managed_group: reynholm
 `
 	_, err := Load(writeTemp(t, "x.yaml", body))
@@ -87,6 +104,7 @@ managed_group: reynholm
 func TestLoad_DuplicateProjectID(t *testing.T) {
 	body := `
 google_domain: example.com
+zitadel_org_id: "123"
 managed_group: reynholm
 projects:
   - id: "1"

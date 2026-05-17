@@ -106,7 +106,7 @@ func run(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("google client: %w", err)
 	}
 
-	zitadelClient, err := zitadel.NewClient(ctx, zitadelDomain, zitadelPAT)
+	zitadelClient, err := zitadel.NewClient(ctx, zitadelDomain, zitadelPAT, cfg.ZitadelOrgID)
 	if err != nil {
 		logger.Error("zitadel client init failed", "err", err, "domain", zitadelDomain)
 		return fmt.Errorf("zitadel client: %w", err)

@@ -105,6 +105,7 @@ projects:
 | Field | Description |
 |-------|-------------|
 | `google_domain` | Your Google Workspace primary domain |
+| `zitadel_org_id` | ZITADEL organization ID for authorization requests |
 | `managed_group` | ZITADEL role group label marking reynholm ownership |
 | `projects` | List of ZITADEL projects to sync |
 | `projects[].id` | ZITADEL project ID |

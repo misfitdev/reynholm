@@ -46,39 +46,44 @@ type services interface {
 	AddProjectRole(ctx context.Context, projectID, roleKey, displayName, group string) error
 	RemoveProjectRole(ctx context.Context, projectID, roleKey string) error
 	ListAuthorizationsPage(ctx context.Context, projectID string, offset uint64, limit uint32) (auths []*authorizationV2.Authorization, total uint64, err error)
-	CreateAuthorization(ctx context.Context, projectID, userID, roleKey string) error
+	CreateAuthorization(ctx context.Context, orgID, projectID, userID, roleKey string) error
 	DeleteAuthorization(ctx context.Context, authorizationID string) error
 }
 
 // Client is the high-level ZITADEL client used by reynholm.
 type Client struct {
 	svc    services
+	orgID  string
 	closer func() error // non-nil only when constructed by NewClient
 }
 
 // NewClient constructs a Client backed by the ZITADEL v3 unified gRPC client
 // authenticated with a Personal Access Token. domain is the bare ZITADEL
 // hostname (e.g. "your-instance.zitadel.cloud"); TLS on 443 is assumed.
-func NewClient(ctx context.Context, domain, pat string) (*Client, error) {
+// orgID is the ZITADEL organization ID used for authorization requests.
+func NewClient(ctx context.Context, domain, pat, orgID string) (*Client, error) {
 	if domain == "" {
 		return nil, errors.New("zitadel: domain is required")
 	}
 	if pat == "" {
 		return nil, errors.New("zitadel: pat is required")
 	}
+	if orgID == "" {
+		return nil, errors.New("zitadel: orgID is required")
+	}
 	z := zitadel.New(domain)
 	c, err := zclient.New(ctx, z, zclient.WithAuth(zclient.PAT(pat)))
 	if err != nil {
 		return nil, fmt.Errorf("zitadel: client.New: %w", err)
 	}
-	return &Client{svc: &sdkServices{c: c}, closer: c.Close}, nil
+	return &Client{svc: &sdkServices{c: c}, orgID: orgID, closer: c.Close}, nil
 }
 
 // NewClientWithServices builds a Client around a caller-supplied services
 // implementation. This is the seam used by tests; production callers should
 // use NewClient.
-func NewClientWithServices(s services) *Client {
-	return &Client{svc: s}
+func NewClientWithServices(s services, orgID string) *Client {
+	return &Client{svc: s, orgID: orgID}
 }
 
 // Close releases the underlying gRPC connection. It must be called when the
@@ -244,7 +249,7 @@ func (c *Client) AddUserGrant(ctx context.Context, projectID, userID, roleKey st
 	if projectID == "" || userID == "" || roleKey == "" {
 		return errors.New("zitadel: projectID, userID and roleKey are required")
 	}
-	return c.svc.CreateAuthorization(ctx, projectID, userID, roleKey)
+	return c.svc.CreateAuthorization(ctx, c.orgID, projectID, userID, roleKey)
 }
 
 // RemoveUserGrant deletes the authorization identified by authorizationID.

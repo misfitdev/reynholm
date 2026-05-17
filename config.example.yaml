@@ -7,6 +7,9 @@
 # Your Google Workspace primary domain.
 google_domain: planera.io
 
+# ZITADEL organization ID. Required for authorization requests.
+zitadel_org_id: "372844504547344154"
+
 # ZITADEL role group label marking reynholm ownership.
 # reynholm ONLY manages roles and grants where the ZITADEL role's Group field
 # matches this value. All other roles and grants are invisible to reynholm.

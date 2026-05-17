@@ -15,6 +15,7 @@ type Project struct {
 
 type Config struct {
 	GoogleDomain string    `yaml:"google_domain"`
+	ZitadelOrgID string    `yaml:"zitadel_org_id"`
 	ManagedGroup string    `yaml:"managed_group"`
 	Projects     []Project `yaml:"projects"`
 }
@@ -48,6 +49,9 @@ func Load(path string) (*Config, error) {
 func (c *Config) validate() error {
 	if c.GoogleDomain == "" {
 		return errors.New("google_domain is required")
+	}
+	if c.ZitadelOrgID == "" {
+		return errors.New("zitadel_org_id is required")
 	}
 	if c.ManagedGroup == "" {
 		return errors.New("managed_group is required")
