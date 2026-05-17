@@ -148,7 +148,7 @@ func (r *Reconciler) buildPlan(
 
 	seenRole := make(map[string]struct{}, len(project.Groups))
 	for _, groupEmail := range project.Groups {
-		if strings.ContainsAny(groupEmail, "*?[") {
+		if strings.Contains(groupEmail, "*") {
 			expanded, err := r.expandGlob(ctx, groupEmail, logger)
 			if err != nil {
 				return nil, fmt.Errorf("expand glob %q: %w", groupEmail, err)
