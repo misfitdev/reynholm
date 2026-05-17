@@ -486,7 +486,7 @@ func TestRun_GlobExpansion(t *testing.T) {
 			"access-design@example.com": {"bob@example.com"},
 		},
 		listGroups: map[string][]string{
-			"example.com|email:access-*@example.com": {
+			"example.com|email:access-*": {
 				"access-design@example.com",
 				"access-eng@example.com",
 			},

@@ -175,7 +175,7 @@ func (r *Reconciler) expandGlob(ctx context.Context, pattern string, logger *slo
 		return nil, fmt.Errorf("glob pattern %q missing domain", pattern)
 	}
 	domain := pattern[at+1:]
-	query := "email:" + pattern
+	query := "email:" + pattern[:at]
 
 	groups, err := r.Google.ListGroups(ctx, domain, query)
 	if err != nil {
