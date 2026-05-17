@@ -23,6 +23,8 @@ import (
 
 	"github.com/misfitdev/reynholm/config"
 	"github.com/misfitdev/reynholm/zitadel"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // googleClient is the subset of the Google client used by Reconciler.
@@ -374,6 +376,10 @@ func (r *Reconciler) reconcileGrants(
 			}
 			rLogger.Info("adding grant", "user_id", userID)
 			if err := r.Zitadel.AddUserGrant(ctx, projectID, userID, roleKey); err != nil {
+				if status.Code(err) == codes.AlreadyExists {
+					rLogger.Info("grant already exists, skipping", "user_id", userID)
+					continue
+				}
 				return fmt.Errorf("zitadel add grant user=%q role=%q: %w", userID, roleKey, err)
 			}
 		}

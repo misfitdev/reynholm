@@ -11,6 +11,8 @@ import (
 
 	"github.com/misfitdev/reynholm/config"
 	"github.com/misfitdev/reynholm/zitadel"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type fakeGoogle struct {
@@ -546,5 +548,16 @@ func TestRun_GlobExpansionError(t *testing.T) {
 	r := New(g, z, cfg, discardLogger())
 	if err := r.Run(context.Background(), true); err == nil {
 		t.Fatal("expected error from glob expansion")
+	}
+}
+
+func TestRun_SkipsAlreadyExistsOnAddGrant(t *testing.T) {
+	g, z := fixtureFakes()
+	z.addGrantErr = status.Error(codes.AlreadyExists, "grant already exists")
+	z.rolesByProject["p1"]["sre"] = "SRE"
+	r := New(g, z, baseCfg(), discardLogger())
+
+	if err := r.Run(context.Background(), false); err != nil {
+		t.Fatalf("expected AlreadyExists to be skipped, got: %v", err)
 	}
 }
