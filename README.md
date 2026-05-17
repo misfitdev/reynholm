@@ -95,6 +95,7 @@ projects:
     groups:
       - engineering@example.com
       - design@example.com
+      - access-*@example.com   # wildcard: expands to all matching groups
 
   - id: "987654321098765432"
     groups:
@@ -107,7 +108,18 @@ projects:
 | `managed_group` | ZITADEL role group label marking reynholm ownership |
 | `projects` | List of ZITADEL projects to sync |
 | `projects[].id` | ZITADEL project ID |
-| `projects[].groups` | Google Workspace group emails whose members get this project's roles |
+| `projects[].groups` | Google Workspace group emails (or `*` wildcard patterns) whose members get this project's roles |
+
+### Wildcard groups
+
+Entries containing `*` are expanded at runtime via the Directory API. The `*` acts as a prefix wildcard on the local part (everything before `@`):
+
+```yaml
+groups:
+  - access-*@example.com   # matches access-eng@, access-design@, etc.
+```
+
+The domain is used to scope the API query; the local-part prefix (e.g. `access-`) filters by email. Each matched group is processed as if it were listed individually.
 
 ### Role mapping
 
@@ -134,14 +146,6 @@ reynholm is a stateless reconciler. Every run:
    - Removes extraneous grants for users no longer in the corresponding Google group.
 
 reynholm **only** touches roles and grants tagged with its `managed_group` label. Manually created roles and grants are never modified.
-
-### Design constraints
-
-- No state file -- every run is a full read from both APIs.
-- Dry-run by default -- `--apply` required to mutate.
-- Never creates ZITADEL users (assumes a SCIM sync like richmond runs first).
-- Never modifies Google groups or ZITADEL projects.
-- Exit 0 on success, 1 on any error.
 
 ## Security
 
